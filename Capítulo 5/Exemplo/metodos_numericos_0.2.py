@@ -15,6 +15,9 @@ class Solver():
 	def set_parametros(self, parametros):
 		self.parametros = parametros
 
+	def add_parametros(self, parametros):
+		self.parametros = self.parametros | parametros
+
 	def set_metodo(self, metodo):
 		self.metodo = metodo
 
@@ -37,9 +40,17 @@ class Data():
 			self.solved = np.zeros((2, self.solver.iteracoes))
 			self.solved[0][0] = self.solver.parametros["NU_0"]
 
+		elif solver.eq_dif == "Laplace Equation (EDP)":
+			x = np.linspace(self.solver.parametros["x_i"], self.solver.parametros["x_f"], self.solver.precisao)
+			y = np.linspace(self.solver.parametros["y_i"], self.solver.parametros["y_f"], self.solver.precisao)
+			self.espaco = np.meshgrid(x, y)
+
 	def calcula(self):
 		if self.solver.eq_dif == "Nuclear Decay (EDO)":
 			self.nuclear_decay()
+
+		elif self.solver.eq_dif == "Laplace Equation (EDP)":
+			self.laplace_equation()
 
 	def nuclear_decay(self):
 		if self.solver.metodo == "Euler":
@@ -47,12 +58,21 @@ class Data():
 				self.solved[0][i] = self.solved[0][i - 1] - (self.solved[0][i - 1] / self.solver.parametros["tau"]) * self.solver.precisao
 				self.solved[1][i] = self.solved[1][i - 1] + self.solver.precisao
 
+	def laplace_equation(self):
+		if self.solver.metodo == "Jacobi":
+			def atualiza_V():
+				delta_V = 0
+
+
 def main():
 	soluciona = Solver()
-	soluciona.set_eq_dif("Nuclear Decay (EDO)")
-	soluciona.set_parametros({"NU_0": 100, "tau": 1})
-	soluciona.set_metodo("Euler")
-	soluciona.set_precisao(0.05)
+	soluciona.set_eq_dif("Laplace Equation (EDP)")
+
+	borda = 1
+
+	soluciona.set_parametros({"x_i": -1, "x_f": 1, "y_i": -1, "y_f": 1})
+	soluciona.set_metodo("Jacobi")
+	soluciona.set_precisao(10)
 	soluciona.set_iteracoes(100)
 
 	solved = soluciona.solve()
