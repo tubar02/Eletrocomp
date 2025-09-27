@@ -37,8 +37,7 @@ class Data(ABC):
 		self.solved: np.ndarray | None = None
 
 	@abstractmethod
-	def retorno(self) -> None:
-		pass
+	def retorno(self) -> None: ...
 
 class DataFactory:
 	@staticmethod
@@ -50,24 +49,76 @@ class DataFactory:
 		raise ValueError(f"Equação não suportada: {solver.eq_dif}")
 
 # ------------------------------------------
+# Updater
+# ------------------------------------------
+class Updater:
+	@staticmethod
+	def for_ode(method: str):
+		m = (method or "").lower()
+		if m == "euler":
+			return Updater._ode_euler
+		raise ValueError(f"Método ODE não suportado: {method}")
+	
+	@staticmethod
+	def for_pde(method: str):
+		m = (method or "").lower()
+		if m == "jacobi":
+			return Updater._pde_jacobi
+		raise ValueError(f"Método EDP não suportado: {method}")
+	
+	# ---------------------- ODE ----------------------
+	@staticmethod
+	def _ode_euler(problem: ODEProblem, i):
+		y, t = problem.ode_arrays()
+		dt  = problem.solver.precisao
+
+		y_prev = y[..., i-1] if y.ndim > 1 else y[i-1]
+		dydt = problem.ode_rhs(t[i-1], y_prev)
+		if y.ndim > 1:
+			y[..., i] = y_prev + dt * dydt
+		else:
+			y[i] = y_prev + dt * dydt
+		t[i] = t[i-1] + dt
+	
+	# ---------------------- PDE ----------------------
+class ODEProblem(Data):
+	@abstractmethod
+	def ode_rhs(self, t: float, y: np.ndarray) -> np.ndarray | float: ...
+	@abstractmethod
+	def ode_arrays(self) -> tuple[np.ndarray, np.ndarray]: ...
+
+class PDEProblem(Data):
+	@abstractmethod
+	def pde_arrays(self) -> np.ndarray: ...
+	@abstractmethod
+	def bc_project(self, U: np.ndarray) -> None: ...
+	@abstractmethod
+	def stencil(self) -> dict[tuple[int, int], float]: ...
+
+# ------------------------------------------
 # Nuclear Decay (exemplo 1D)
 # ------------------------------------------
-class Nuclear_Decay(Data):
+class Nuclear_Decay(ODEProblem):
 	def __init__(self, solver: Solver):
 		super().__init__(solver)
 		n = solver.iteracoes
 		self.solved = np.zeros((2, n), dtype = float)
 		self.solved[0, 0] = solver.parametros["NU_0"]
+		self.solved[0, 1] = solver.parametros.get("t_0", 0)
+
+	def ode_rhs(self, t: float, N: float) -> float:
+		tau = self.solver.parametros["tau"]
+		return -N / tau
+
+	def ode_arrays(self) -> tuple[np.ndarray, np.ndarray]:
+		N_arr = self.solved[0, :]
+		t_arr = self.solved[1, :]
+		return N_arr, t_arr
 
 	def retorno(self) -> None:
-		if self.solver.metodo != "Euler":
-			raise ValueError("Método não implementado para Nuclear Decay.")
-		dt  = self.solver.precisao
-		tau = self.solver.parametros["tau"]
-		for i in range(1, self.solved.shape[1]):
-			N_prev = self.solved[0, i-1]
-			self.solved[0, i] = N_prev - (N_prev / tau) * dt
-			self.solved[1, i] = self.solved[1, i-1] + dt
+		update = Updater.for_ode(self.solver.metodo)
+		for i in range(1, self.solver.iteracoes):
+			update(self, i)
 
 # ------------------------------------------
 # Laplace 2D
@@ -150,7 +201,7 @@ def salva_dados(matriz: np.ndarray, nome_arq: str):
 			linha = " ".join(matriz[i, :].astype(str))
 			linha += "\n"
 			arq.write(linha)
-
+'''
 def main():
 	sol = Solver()
 	sol.set_eq_dif("Laplace Equation (EDP)")
@@ -176,6 +227,43 @@ def main():
 	salva_dados(V, "Dados\\potencial.dat")
 	salva_dados(X, "Dados\\espacoX.dat")
 	salva_dados(Y, "Dados\\espacoY.dat")
+'''
+
+def demo_edo():
+	sol = Solver(eq_dif="Nuclear Decay (EDO)", metodo="Euler",
+				precisao=0.05, iteracoes=200,
+				parametros={"NU_0": 100.0, "tau": 1.0})
+	dados = sol.solve()
+	N, t = dados.solved[0], dados.solved[1]
+	plt.plot(t, N, "-b")
+	plt.xlabel("t"); plt.ylabel("N(t)"); plt.title("Decaimento Nuclear — Euler")
+	plt.grid(True); plt.show()
+
+def demo_edp():
+	n = 200
+	eps = 1e-12
+	cc = [
+		{"where": lambda X, Y: np.isclose(X, -1.0, atol=eps), "V": -1.0},
+		{"where": lambda X, Y: np.isclose(X,  1.0, atol=eps), "V": +1.0},
+	]
+	sol = Solver(eq_dif="Laplace Equation (EDP)", metodo="Jacobi",
+				precisao=1e-5, iteracoes=n,
+				parametros={"x_i": -1, "x_f": 1, "y_i": -1, "y_f": 1, "cc": cc, "max_iters": 20000})
+	dados = sol.solve()
+	U = dados.solved
+	X, Y = dados.espaco
+
+	plt.imshow(U, origin="lower",
+			extent=[X.min(), X.max(), Y.min(), Y.max()],
+			aspect="equal", cmap="coolwarm")
+	plt.colorbar(label="V")
+	plt.title("Laplace 2D — Jacobi (Dirichlet)")
+	plt.xlabel("x"); plt.ylabel("y")
+	plt.show()
+
+def main():
+	demo_edo()
+	demo_edp()
 
 if __name__ == "__main__":
 	main()
