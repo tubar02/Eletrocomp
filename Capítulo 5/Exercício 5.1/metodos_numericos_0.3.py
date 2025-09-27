@@ -90,7 +90,7 @@ class Laplace_Equation(Data):
 		self.espaco: tuple[np.ndarray, np.ndarray] = (X, Y)
 
 		# Condições de contorno (Dirichlet) via regras "where"
-		self.contorno: np.ndarray  = Laplace_Equation.laplace_Contorno(self)
+		self.contorno: np.ndarray  = self._build_Contorno()
 		Vcc   = self.contorno.astype(float)
 		self.fixed = ~np.isnan(Vcc)         # True = ponto travado (tem valor)
 		self.V_0   = np.where(self.fixed, self.contorno, 0.0)  # estado inicial
@@ -102,11 +102,10 @@ class Laplace_Equation(Data):
 		self.solved = self.V_0.copy()
 		deltaV = np.infty
 		while deltaV > self.solver.precisao:
-			self.solved, deltaV = Laplace_Equation.atualiza_V(self)
+			self.solved, deltaV = self._atualiza_V()
 			print(f"DeltaV = {deltaV:.3e}")
 
-	@staticmethod
-	def atualiza_V(self):
+	def _atualiza_V(self):
 		V = self.solved
 		Vcc = self.contorno
 		fixed = self.fixed
@@ -133,8 +132,7 @@ class Laplace_Equation(Data):
 		deltaV = np.mean(np.abs(Vnew - V))  # precisão por sítio
 		return Vnew, deltaV
 	
-	@staticmethod
-	def laplace_Contorno(self): 
+	def _build_Contorno(self): 
 		X, Y = self.espaco
 		mascara = np.full(X.shape, np.nan, dtype = float)
 		regras: list[dict[str, float | Callable[[np.ndarray, np.ndarray], np.ndarray]]] = self.solver.parametros["cc"]
@@ -143,6 +141,15 @@ class Laplace_Equation(Data):
 			V = r["V"]
 			mascara[M] = V
 		return mascara
+	
+def salva_dados(matriz: np.ndarray, nome_arq: str):
+	with open(nome_arq, "w") as arq:
+		n_lin, n_col = matriz.shape
+		arq.write(f"{n_lin} {n_col}\n")
+		for i in range(matriz.shape[0]):
+			linha = " ".join(matriz[i, :].astype(str))
+			linha += "\n"
+			arq.write(linha)
 
 def main():
 	sol = Solver()
@@ -166,23 +173,9 @@ def main():
 	V = dados.solved            # matriz (n, n)
 	X, Y = dados.espaco
 
-
-
-	# três formas de visualizar
-	plt.imshow(V, origin="lower", aspect="equal", cmap="coolwarm")
-	plt.colorbar(label="V")
-	plt.title("V (imshow)"); plt.xlabel("x"); plt.ylabel("y")
-	plt.show()
-
-	cs = plt.contourf(X, Y, V, levels=20, cmap="coolwarm")
-	plt.colorbar(cs, label="V")
-	plt.title("Equipotenciais (contourf)"); plt.xlabel("x"); plt.ylabel("y")
-	plt.show()
-
-	plt.pcolormesh(X, Y, V, shading="auto", cmap="coolwarm")
-	plt.colorbar(label="V")
-	plt.title("V (pcolormesh)"); plt.xlabel("x"); plt.ylabel("y")
-	plt.show()
+	salva_dados(V, "Dados\\potencial.dat")
+	salva_dados(X, "Dados\\espacoX.dat")
+	salva_dados(Y, "Dados\\espacoY.dat")
 
 if __name__ == "__main__":
 	main()
