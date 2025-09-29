@@ -68,7 +68,7 @@ class Updater:
 	
 	# ---------------------- ODE ----------------------
 	@staticmethod
-	def _ode_euler(problem: ODEProblem, i):
+	def _ode_euler(problem: ODEProblem, i: int):
 		y, t = problem.ode_arrays()
 		dt  = problem.solver.precisao
 
@@ -81,6 +81,44 @@ class Updater:
 		t[i] = t[i-1] + dt
 	
 	# ---------------------- PDE ----------------------
+	@staticmethod
+	def _pde_jacobi(problem: PDEProblem):
+		"""
+		Jacobi genérico guiado por 'stencil' (sem padding, sem wrap).
+		Requer do problema:
+		- pde_arrays() -> U (2D)
+		- bc_project(U) -> reimpõe CC (ex.: Dirichlet)
+		- stencil() -> dict[(di,dj)] = peso  (ex.: Laplace 5-pontos)
+		- rhs() opcional (b), default 0
+		Resolve A U = b onde A vem do stencil.
+		"""
+		U = problem.pde_arrays()
+		st = problem.stencil()  # ex.: {(+1,0):1, (-1,0):1, (0,+1):1, (0,-1):1, (0,0):-4}
+		b = problem.rhs() if hasattr(problem, "rhs") else np.zeros_like(U)
+
+		diag = st[(0, 0)]
+		neighbors = [(shift, w) for shift, w in st.items() if shift != (0, 0)]
+
+		S = np.zeros_like(U)
+
+		# acumula w * U deslocado:
+		for (di, dj), w in neighbors:
+			if di > 0:
+				S[di:,  :] += w * U[:-di, :]
+			elif di < 0:
+				S[:di,  :] += w * U[-di:, :]
+			if dj > 0:
+				S[:, dj:] += w * U[:, :-dj]
+			elif dj < 0:
+				S[:, :dj] += w * U[:, -dj:]
+
+		Unew = (b - S) / diag   # isolando a diagonal
+		problem.bc_project(Unew)
+
+		delta = np.mean(np.abs(Unew - U))
+		problem.solved = Unew
+		return delta
+	
 class ODEProblem(Data):
 	@abstractmethod
 	def ode_rhs(self, t: float, y: np.ndarray) -> np.ndarray | float: ...
@@ -123,75 +161,47 @@ class Nuclear_Decay(ODEProblem):
 # ------------------------------------------
 # Laplace 2D
 # ------------------------------------------
-class Laplace_Equation(Data):
+class Laplace_Equation(PDEProblem):
 	def __init__(self, solver: Solver):
 		super().__init__(solver)
-
-		# n pontos por eixo
-		n = self.solver.iteracoes
-
-		xi = self.solver.parametros["x_i"]
-		xf = self.solver.parametros["x_f"]
-		yi = self.solver.parametros["y_i"]
-		yf = self.solver.parametros["y_f"]
+		n = solver.iteracoes
+		xi, xf = solver.parametros["x_i"], solver.parametros["x_f"]
+		yi, yf = solver.parametros["y_i"], solver.parametros["y_f"]
 
 		x = np.linspace(xi, xf, n, dtype=float)
 		y = np.linspace(yi, yf, n, dtype=float)
 		X, Y = np.meshgrid(x, y, indexing="xy")
-		self.espaco: tuple[np.ndarray, np.ndarray] = (X, Y)
+		self.espaco = (X, Y)
 
-		# Condições de contorno (Dirichlet) via regras "where"
-		self.contorno: np.ndarray  = self._build_Contorno()
-		Vcc   = self.contorno.astype(float)
-		self.fixed = ~np.isnan(Vcc)         # True = ponto travado (tem valor)
-		self.V_0   = np.where(self.fixed, self.contorno, 0.0)  # estado inicial
+		# máscara
+		self.Vcc = np.full(X.shape, np.nan, dtype=float)
+		for rule in solver.parametros["cc"]:
+			M = rule["where"](X, Y)   # máscara booleana
+			self.Vcc[M] = rule["V"]
 
-	def retorno(self):
-		if self.solver.metodo != "Jacobi":
-			raise ValueError("Método não implementado para Laplace Equation.")
+		self.fixed = ~np.isnan(self.Vcc)
+		self.Vcc_filled = np.where(self.fixed, self.Vcc, 0.0)
 
-		self.solved = self.V_0.copy()
-		deltaV = np.infty
+		# estado inicial:
+		self.solved = self.Vcc_filled.copy()
+
+	def pde_arrays(self) -> np.ndarray:
+		return self.solved
+
+	def bc_project(self, U: np.ndarray) -> None:
+		# reimpõe Dirichlet
+		np.copyto(U, self.Vcc, where=self.fixed)
+
+	def stencil(self) -> dict[tuple[int, int], float]:
+		# Laplaciano 5-pontos homogêneo: +1 nos vizinhos cardeais, -4 no ponto
+		return {(+1, 0): 1.0, (-1, 0): 1.0, (0, +1): 1.0, (0, -1): 1.0, (0, 0): -4.0}
+
+	def retorno(self) -> None:
+		update = Updater.for_pde(self.solver.metodo) 
+		deltaV = np.inf
 		while deltaV > self.solver.precisao:
-			self.solved, deltaV = self._atualiza_V()
+			deltaV = update(self)
 			print(f"DeltaV = {deltaV:.3e}")
-
-	def _atualiza_V(self):
-		V = self.solved
-		Vcc = self.contorno
-		fixed = self.fixed
-
-		# Soma (S) e contagem (C) de vizinhos por fatiamento
-		S = np.zeros_like(V)
-		C = np.zeros_like(V)
-
-		# cima
-		S[1:,  :] += V[:-1, :]
-		C[1:,  :] += 1
-		# baixo
-		S[:-1, :] += V[1:,  :]
-		C[:-1, :] += 1
-		# esquerda
-		S[:, 1:]  += V[:, :-1]
-		C[:, 1:]  += 1
-		# direita
-		S[:, :-1] += V[:, 1:]
-		C[:, :-1] += 1
-
-		Vnew = S / C                 # média dos vizinhos (2, 3 ou 4)
-		np.copyto(Vnew, Vcc, where = fixed)  # reimpõe Dirichlet
-		deltaV = np.mean(np.abs(Vnew - V))  # precisão por sítio
-		return Vnew, deltaV
-	
-	def _build_Contorno(self): 
-		X, Y = self.espaco
-		mascara = np.full(X.shape, np.nan, dtype = float)
-		regras: list[dict[str, float | Callable[[np.ndarray, np.ndarray], np.ndarray]]] = self.solver.parametros["cc"]
-		for r in regras:
-			M = r["where"](X, Y)     # máscara booleana
-			V = r["V"]
-			mascara[M] = V
-		return mascara
 	
 def salva_dados(matriz: np.ndarray, nome_arq: str):
 	with open(nome_arq, "w") as arq:
@@ -201,7 +211,7 @@ def salva_dados(matriz: np.ndarray, nome_arq: str):
 			linha = " ".join(matriz[i, :].astype(str))
 			linha += "\n"
 			arq.write(linha)
-'''
+
 def main():
 	sol = Solver()
 	sol.set_eq_dif("Laplace Equation (EDP)")
@@ -215,7 +225,7 @@ def main():
 		{"where": lambda X, Y: np.isclose(X, -1.0, atol=eps), "V": -1.0},
 		{"where": lambda X, Y: np.isclose(X,  1.0, atol=eps), "V": +1.0},
 		# exemplo interno (opcional):
-		# {"where": lambda X, Y: (X**2 + Y**2) <= 0.3**2, "V": 0.75},
+		{"where": lambda X, Y: (X**2 + Y**2) <= 0.3**2, "V": 0.75},
 	]
 	sol.add_parametros({"cc": cc})
 
@@ -224,46 +234,9 @@ def main():
 	V = dados.solved            # matriz (n, n)
 	X, Y = dados.espaco
 
-	salva_dados(V, "Dados\\potencial.dat")
+	salva_dados(V, "Dados\\potencial_circ.dat")
 	salva_dados(X, "Dados\\espacoX.dat")
 	salva_dados(Y, "Dados\\espacoY.dat")
-'''
-
-def demo_edo():
-	sol = Solver(eq_dif="Nuclear Decay (EDO)", metodo="Euler",
-				precisao=0.05, iteracoes=200,
-				parametros={"NU_0": 100.0, "tau": 1.0})
-	dados = sol.solve()
-	N, t = dados.solved[0], dados.solved[1]
-	plt.plot(t, N, "-b")
-	plt.xlabel("t"); plt.ylabel("N(t)"); plt.title("Decaimento Nuclear — Euler")
-	plt.grid(True); plt.show()
-
-def demo_edp():
-	n = 200
-	eps = 1e-12
-	cc = [
-		{"where": lambda X, Y: np.isclose(X, -1.0, atol=eps), "V": -1.0},
-		{"where": lambda X, Y: np.isclose(X,  1.0, atol=eps), "V": +1.0},
-	]
-	sol = Solver(eq_dif="Laplace Equation (EDP)", metodo="Jacobi",
-				precisao=1e-5, iteracoes=n,
-				parametros={"x_i": -1, "x_f": 1, "y_i": -1, "y_f": 1, "cc": cc, "max_iters": 20000})
-	dados = sol.solve()
-	U = dados.solved
-	X, Y = dados.espaco
-
-	plt.imshow(U, origin="lower",
-			extent=[X.min(), X.max(), Y.min(), Y.max()],
-			aspect="equal", cmap="coolwarm")
-	plt.colorbar(label="V")
-	plt.title("Laplace 2D — Jacobi (Dirichlet)")
-	plt.xlabel("x"); plt.ylabel("y")
-	plt.show()
-
-def main():
-	demo_edo()
-	demo_edp()
 
 if __name__ == "__main__":
 	main()

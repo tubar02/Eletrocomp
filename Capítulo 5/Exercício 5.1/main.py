@@ -12,9 +12,6 @@ def le_dat(nome_arq: str) -> np.ndarray:
 			matriz[i, :] = lista
 	return matriz
 
-from functools import wraps
-import matplotlib.pyplot as plt
-
 def plotter(num_opcoes: int):
 	def deco(func):
 		@wraps(func)
@@ -55,7 +52,7 @@ def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, opcao: int = 1):
 
 def main():
 	pasta = "Dados\\"
-	V = le_dat(pasta + "potencial")
+	V = le_dat(pasta + "potencial_circ")
 	X = le_dat(pasta + "espacoX")
 	Y = le_dat(pasta + "espacoY")
 
@@ -63,6 +60,18 @@ def main():
 	
 	for i, titulo in enumerate(titulos):
 		plota_ex5_1(V, X, Y, i + 1, titulo = titulo)
+
+	certo = True
+	eps = 1e-5
+	for i in range(V.shape[0]):
+		for j in range (V.shape[1]):
+			try:
+				soma_viz = V[i - 1, j] + V[i + 1, j] + V[i, j - 1] + V[i, j + 1]
+				if not np.isclose(V, soma_viz, atol=eps):
+					certo = False
+			except:
+				pass
+	print(certo)
 
 if __name__ == "__main__":
 	main()
