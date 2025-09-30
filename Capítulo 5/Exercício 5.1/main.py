@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 from functools import wraps
 
 def le_dat(nome_arq: str) -> np.ndarray:
@@ -38,28 +39,41 @@ def plotter(num_opcoes: int):
 		return wrapper
 	return deco
 
+def plota_superficie(X: np.ndarray, Y: np.ndarray, V: np.ndarray):
+	fig = plt.figure(figsize=(12, 12))
+	ax = fig.add_subplot(111, projection="3d")
+
+	# cria a superfície
+	surf = ax.plot_surface(X, Y, V, cmap="coolwarm", edgecolor="none")
+
+	# adiciona barra de cores
+	fig.colorbar(surf, shrink=0.5, aspect=10, label="Potencial V")
+	ax.set_zlabel("V(x,y)")
+
+	plt.show()
+
 @plotter(3)
 def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, opcao: int = 1):
-    if opcao == 1:
-        im = plt.imshow(V, origin="lower", aspect="equal", cmap="coolwarm")
-        plt.colorbar(im, label="V")
-    elif opcao == 2:
-        cs = plt.contourf(X, Y, V, levels=20, cmap="coolwarm")
-        plt.colorbar(cs, label="V")
-    else:
-        qc = plt.pcolormesh(X, Y, V, shading="auto", cmap="coolwarm")
-        plt.colorbar(qc, label="V")
+	if opcao == 1:
+		im = plt.imshow(V, origin="lower", aspect="equal", cmap="coolwarm")
+		plt.colorbar(im, label="V")
+	elif opcao == 2:
+		cs = plt.contourf(X, Y, V, levels=20, cmap="coolwarm")
+		plt.colorbar(cs, label="V")
+	elif opcao == 3:
+		qc = plt.pcolormesh(X, Y, V, shading="auto", cmap="coolwarm")
+		plt.colorbar(qc, label="V")
 
 def main():
 	pasta = "Dados\\"
-	V = le_dat(pasta + "potencial_circ")
+	V = le_dat(pasta + "potencial_ret")
 	X = le_dat(pasta + "espacoX")
 	Y = le_dat(pasta + "espacoY")
 
 	titulos = ["Potencial V", "Linhas Equipotenciais", "Potencial V"]
 	
 	for i, titulo in enumerate(titulos):
-		plota_ex5_1(V, X, Y, i + 1, titulo = titulo)
+		plota_ex5_1(V, X, Y, opcao = i + 1, titulo = titulo)
 
 	certo = True
 	eps = 1e-5
@@ -72,6 +86,7 @@ def main():
 			except:
 				pass
 	print(certo)
+	plota_superficie(X, Y, V)
 
 if __name__ == "__main__":
 	main()

@@ -221,11 +221,23 @@ def main():
 	sol.set_parametros({"x_i": -1, "x_f": 1, "y_i": -1, "y_f": 1})
 
 	eps = 1e-12
+
+	def retangulo(X: np.ndarray, Y: np.ndarray) -> np.ndarray:
+		mat = np.empty(X.shape, dtype=bool)
+		for i in range(X.shape[0]):
+			for j in range(X.shape[1]):
+				if np.abs(X[i, j]) <= 0.3 and np.abs(Y[i, j]) <= 0.3:
+					mat[i, j] = True
+				else:
+					mat[i, j] = False
+		return mat
+
 	cc = [
-		{"where": lambda X, Y: np.isclose(X, -1.0, atol=eps), "V": -1.0},
-		{"where": lambda X, Y: np.isclose(X,  1.0, atol=eps), "V": +1.0},
-		# exemplo interno (opcional):
-		{"where": lambda X, Y: (X**2 + Y**2) <= 0.3**2, "V": 0.75},
+		{"where": retangulo, "V": 1.0},
+		{"where": lambda X, Y: np.isclose(X, -1, atol=eps), "V": 0},
+		{"where": lambda X, Y: np.isclose(X, 1, atol=eps), "V": 0},
+		{"where": lambda X, Y: np.isclose(Y, -1, atol=eps), "V": 0},
+		{"where": lambda X, Y: np.isclose(Y, 1, atol=eps), "V": 0}
 	]
 	sol.add_parametros({"cc": cc})
 
@@ -234,7 +246,7 @@ def main():
 	V = dados.solved            # matriz (n, n)
 	X, Y = dados.espaco
 
-	salva_dados(V, "Dados\\potencial_circ.dat")
+	salva_dados(V, "Dados\\potencial_ret.dat")
 	salva_dados(X, "Dados\\espacoX.dat")
 	salva_dados(Y, "Dados\\espacoY.dat")
 
