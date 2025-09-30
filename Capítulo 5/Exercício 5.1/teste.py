@@ -3,14 +3,14 @@ from __future__ import annotations
 import numpy as np
 
 from Códigos.core import solver
-from Códigos.utils import io
+from Códigos.utils import io, paths
 
 def main():
 	sol = solver.Solver()
 	sol.set_eq_dif("Laplace Equation (EDP)")
 	sol.set_metodo("Jacobi")
 	sol.set_iteracoes(250)
-	sol.set_precisao(1e-5)
+	sol.set_precisao(1e-7)
 	sol.set_parametros({"x_i": -1, "x_f": 1, "y_i": -1, "y_f": 1})
 
 	eps = 1e-12
@@ -40,11 +40,11 @@ def main():
 	X, Y = dados.espaco
 	Ex, Ey = dados.Ex, dados.Ey
 
-	io.salva_dat(V, "Dados\\potencial.dat")
-	io.salva_dat(X, "Dados\\potencial_x.dat")
-	io.salva_dat(Y, "Dados\\potencial_y.dat")
-	io.salva_dat(Ex, "Dados\\potencial_Ex.dat")
-	io.salva_dat(Ey, "Dados\\potencial_Ey.dat")
+	io.salva_dat(V, paths.out_file("potencial"))
+	io.salva_dat(X, paths.out_file("potencial_x"))
+	io.salva_dat(Y, paths.out_file("potencial_y"))
+	io.salva_dat(Ex, paths.out_file("potencial_Ex"))
+	io.salva_dat(Ey, paths.out_file("potencial_Ey"))
 
 if __name__ == "__main__":
 	main()

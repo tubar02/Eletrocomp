@@ -30,37 +30,43 @@ def plotter(num_opcoes: int):
 		return wrapper
 	return deco
 
-def plota_superficie(X: np.ndarray, Y: np.ndarray, V: np.ndarray):
-	fig = plt.figure(figsize=(12, 12))
+def plota_superficie(X: np.ndarray, Y: np.ndarray, V: np.ndarray, label):
+	fig = plt.figure(figsize=(8, 6))
 	ax = fig.add_subplot(111, projection="3d")
 
 	# cria a superfície
 	surf = ax.plot_surface(X, Y, V, cmap="coolwarm", edgecolor="none")
 
 	# adiciona barra de cores
-	fig.colorbar(surf, shrink=0.5, aspect=10, label="Potencial V")
+	fig.colorbar(surf, shrink=0.5, aspect=10, label=label)
 	ax.set_zlabel("V(x,y)")
 
-	plt.show()
-
 def plot_campo_vetorial(Vx, Vy, X, Y, *, step=8):
-	fig, ax = plt.subplots(figsize=(6,5))
+	fig, ax = plt.subplots(figsize=(7,6))
 	Q = ax.quiver(X[::step, ::step], Y[::step, ::step],	Vx[::step, ::step], Vy[::step, ::step],	
 				pivot="mid", angles="xy", scale_units="xy", scale=None)
-	ax.set_aspect("equal"); ax.set_xlabel("x"); ax.set_ylabel("y")
-	ax.set_title("Campo elétrico"); plt.show()
+	ax.set_aspect("equal")
 
-@plotter(3)
-def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, opcao: int = 1):
+@plotter(4)
+def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, Ex: np.ndarray, Ey: np.ndarray, 
+				*, titulo = "Potencial V", opcao: int = 1, label = "V"):
 	if opcao == 1:
-		im = plt.imshow(V, origin="lower", aspect="equal", cmap="coolwarm")
-		plt.colorbar(im, label="V")
+		# imagem 2D do potencial
+		extent = [X.min(), X.max(), Y.min(), Y.max()]
+		fig, ax = plt.subplots(figsize=(7, 6))
+		im = ax.imshow(V, origin="lower", aspect="equal", cmap="coolwarm", extent=extent)
+		plt.colorbar(im, ax=ax, label=label)
 	elif opcao == 2:
-		cs = plt.contourf(X, Y, V, levels=20, cmap="coolwarm")
-		plt.colorbar(cs, label="V")
+		# equipotenciais
+		fig, ax = plt.subplots(figsize=(7, 6))
+		cs = ax.contourf(X, Y, V, levels=20, cmap="coolwarm")
+		plt.colorbar(cs, ax=ax, label=label)
 	elif opcao == 3:
-		qc = plt.pcolormesh(X, Y, V, shading="auto", cmap="coolwarm")
-		plt.colorbar(qc, label="V")
+		# superfície 3D
+		plota_superficie(X, Y, V, label=label)
+	elif opcao == 4:
+		# campo elétrico
+		plot_campo_vetorial(Ex, Ey, X, Y, step=12)
 
 def main():
 	paths.init_project_tree()
@@ -71,10 +77,10 @@ def main():
 	Ex = io.le_dat(paths.out_file("potencial_Ex"))
 	Ey = io.le_dat(paths.out_file("potencial_Ey"))
 
-	titulos = ["Potencial V", "Linhas Equipotenciais", "Potencial V"]
+	titulos = ["Potencial V", "Linhas Equipotenciais", "Potencial V, visão 3D", "Campo Elétrico"]
 	
 	for i, titulo in enumerate(titulos):
-		plota_ex5_1(V, X, Y, opcao = i + 1, titulo = titulo)
+		plota_ex5_1(V, X, Y, Ex, Ey, opcao = i + 1, titulo = titulo)
 	'''
 	certo = True
 	eps = 1e-5
@@ -88,8 +94,6 @@ def main():
 				pass
 	print(certo)
 	'''
-	plota_superficie(X, Y, V)
-	plot_campo_vetorial(Ex, Ey, X, Y, step=12)
 
 if __name__ == "__main__":
 	main()
