@@ -66,9 +66,9 @@ def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, opcao: int = 1):
 
 def main():
 	pasta = "Dados\\"
-	V = le_dat(pasta + "potencial_ret")
-	X = le_dat(pasta + "espacoX")
-	Y = le_dat(pasta + "espacoY")
+	V = le_dat(pasta + "a")
+	X = le_dat(pasta + "aX")
+	Y = le_dat(pasta + "aY")
 
 	titulos = ["Potencial V", "Linhas Equipotenciais", "Potencial V"]
 	
