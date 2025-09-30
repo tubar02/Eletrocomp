@@ -1,17 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 from functools import wraps
 
-def le_dat(nome_arq: str) -> np.ndarray:
-	nome_arq += ".dat"
-	with open(nome_arq) as arq:
-		n_lin, n_col = [int(i) for i in arq.readline().split(" ")]
-		matriz = np.zeros((n_lin, n_col), dtype = float)
-		for i in range(n_lin):
-			lista = [float(v) for v in arq.readline().split(" ")]
-			matriz[i, :] = lista
-	return matriz
+from Códigos.utils import io, paths
 
 def plotter(num_opcoes: int):
 	def deco(func):
@@ -52,6 +43,13 @@ def plota_superficie(X: np.ndarray, Y: np.ndarray, V: np.ndarray):
 
 	plt.show()
 
+def plot_campo_vetorial(Vx, Vy, X, Y, *, step=8):
+	fig, ax = plt.subplots(figsize=(6,5))
+	Q = ax.quiver(X[::step, ::step], Y[::step, ::step],	Vx[::step, ::step], Vy[::step, ::step],	
+				pivot="mid", angles="xy", scale_units="xy", scale=None)
+	ax.set_aspect("equal"); ax.set_xlabel("x"); ax.set_ylabel("y")
+	ax.set_title("Campo elétrico"); plt.show()
+
 @plotter(3)
 def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, opcao: int = 1):
 	if opcao == 1:
@@ -65,16 +63,19 @@ def plota_ex5_1(V: np.ndarray, X: np.ndarray, Y: np.ndarray, opcao: int = 1):
 		plt.colorbar(qc, label="V")
 
 def main():
-	pasta = "Dados\\"
-	V = le_dat(pasta + "a")
-	X = le_dat(pasta + "aX")
-	Y = le_dat(pasta + "aY")
+	paths.init_project_tree()
+
+	V = io.le_dat(paths.out_file("potencial"))
+	X = io.le_dat(paths.out_file("potencial_x"))
+	Y = io.le_dat(paths.out_file("potencial_y"))
+	Ex = io.le_dat(paths.out_file("potencial_Ex"))
+	Ey = io.le_dat(paths.out_file("potencial_Ey"))
 
 	titulos = ["Potencial V", "Linhas Equipotenciais", "Potencial V"]
 	
 	for i, titulo in enumerate(titulos):
 		plota_ex5_1(V, X, Y, opcao = i + 1, titulo = titulo)
-
+	'''
 	certo = True
 	eps = 1e-5
 	for i in range(V.shape[0]):
@@ -86,7 +87,9 @@ def main():
 			except:
 				pass
 	print(certo)
+	'''
 	plota_superficie(X, Y, V)
+	plot_campo_vetorial(Ex, Ey, X, Y, step=12)
 
 if __name__ == "__main__":
 	main()

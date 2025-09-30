@@ -71,3 +71,14 @@ class Laplace_Equation(solver.PDEProblem):
 		while deltaV > self.solver.precisao:
 			deltaV = update(self)
 			print(f"DeltaV = {deltaV:.3e}")
+		self._compute_field()
+
+	def _compute_field(self, edge_order: int = 2) -> None:
+		"""Calcula Ex e Ey a partir de V (self.solved),
+		respeitando a malha física e mascarando pontos fixos."""
+		X, Y = self.espaco
+		x, y = X[0, :], Y[:, 0]
+
+		dVdy, dVdx = np.gradient(self.solved, x, y, edge_order=2)
+		self.Ex, self.Ey = -dVdx, -dVdy
+		self.Ex[self.fixed], self.Ey[self.fixed] = np.nan, np.nan

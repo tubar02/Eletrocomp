@@ -75,4 +75,3 @@ class Updater:
 		delta = np.mean(np.abs(Unew - U))
 		problem.solved = Unew
 		return delta
-	

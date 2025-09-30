@@ -3,15 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from Códigos.core import solver
-
-def salva_dados(matriz: np.ndarray, nome_arq: str):
-	with open(nome_arq, "w") as arq:
-		n_lin, n_col = matriz.shape
-		arq.write(f"{n_lin} {n_col}\n")
-		for i in range(matriz.shape[0]):
-			linha = " ".join(matriz[i, :].astype(str))
-			linha += "\n"
-			arq.write(linha)
+from Códigos.utils import io
 
 def main():
 	sol = solver.Solver()
@@ -46,10 +38,13 @@ def main():
 
 	V = dados.solved            # matriz (n, n)
 	X, Y = dados.espaco
+	Ex, Ey = dados.Ex, dados.Ey
 
-	salva_dados(V, "Dados\\a.dat")
-	salva_dados(X, "Dados\\aX.dat")
-	salva_dados(Y, "Dados\\aY.dat")
+	io.salva_dat(V, "Dados\\potencial.dat")
+	io.salva_dat(X, "Dados\\potencial_x.dat")
+	io.salva_dat(Y, "Dados\\potencial_y.dat")
+	io.salva_dat(Ex, "Dados\\potencial_Ex.dat")
+	io.salva_dat(Ey, "Dados\\potencial_Ey.dat")
 
 if __name__ == "__main__":
 	main()
